@@ -1,0 +1,13 @@
+# GeoClue2 Bridge Location Whitelist
+#
+# Apps listed here are allowed to access location via the GeoClue2 bridge
+# even if they don't have the Ubuntu Touch 'location' policy group.
+#
+# Format: one AppArmor app_id per line (as shown in /proc/<pid>/attr/current)
+# Lines starting with # are comments.
+#
+# By default, apps with 'location' in their click policy_groups AND
+# unconfined apps are automatically allowed (no need to list them here).
+#
+# Example: to allow Firefox (which lacks the location policy group):
+# firefox.fuseteam_navigator_150.0.2

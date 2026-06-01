@@ -1,0 +1,19 @@
+[Unit]
+Description=GeoClue2 to Lomiri Location Service Bridge
+After=lomiri-location-service.service
+Wants=lomiri-location-service.service
+
+[Service]
+Type=simple
+User=phablet
+ExecStart=/usr/bin/python3 /home/phablet/geoclue2-bridge/geoclue2-bridge.py
+Restart=on-failure
+RestartSec=5
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=geoclue2-bridge
+
+[Install]
+WantedBy=multi-user.target
