@@ -105,3 +105,5 @@ Firefox will then connect to `org.freedesktop.GeoClue2` on the system bus for lo
 - `org.freedesktop.GeoClue2.conf` - D-Bus system bus policy
 - `geoclue2-bridge.service` - systemd unit file
 - `deploy.sh` - Deployment script
+- `enable-firefox-geoclue.sh` - Deployed as `~/geoclue2-bridge/gps.sh`; re-run after Firefox/system updates
+- `test-client.py` - On-device GeoClue2 Start/fix/Stop test (verifies bridge survives GPS stop)

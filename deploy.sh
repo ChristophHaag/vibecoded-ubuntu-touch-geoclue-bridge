@@ -38,7 +38,13 @@ install() {
         "$SCRIPT_DIR/location-whitelist.txt" \
         "$SCRIPT_DIR/add-location-policy.sh" \
         "$SCRIPT_DIR/patch-apparmor-geoclue2.sh" \
+        "$SCRIPT_DIR/test-client.py" \
+        "$SCRIPT_DIR/gps-diag.sh" \
         "$DEVICE:$REMOTE_DIR/"
+    scp -o StrictHostKeyChecking=no \
+        "$SCRIPT_DIR/enable-firefox-geoclue.sh" \
+        "$DEVICE:$REMOTE_DIR/gps.sh"
+    ssh_cmd "chmod +x $REMOTE_DIR/gps.sh"
 
     # Install D-Bus policy (requires remounting root rw)
     echo "[2/5] Installing D-Bus policy (needs sudo)..."

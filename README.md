@@ -78,6 +78,27 @@ ssh -t phablet@192.168.1.120 "sudo /home/phablet/geoclue2-bridge/patch-apparmor-
 
 Then restart Firefox for the new AppArmor rules to take effect.
 
+### After a System or Firefox Update
+
+Only one step is needed (auto-detects the newest installed Firefox):
+
+```bash
+ssh -t phablet@192.168.1.120 "sudo ~/geoclue2-bridge/gps.sh"
+```
+
+Then restart Firefox. The bridge itself lives in `/home` and `/etc/systemd/system`,
+which survive system updates. The old `gps-fix` library patch is no longer needed
+(the deadlock is fixed upstream).
+
+### Testing
+
+```bash
+ssh phablet@192.168.1.120 "python3 ~/geoclue2-bridge/test-client.py 60"
+```
+
+Starts a GeoClue2 client, waits up to 60s for a fix, stops it, and checks the bridge
+survived GPS shutdown. Exit code: 0 = fix, 2 = no fix (indoors?), 1 = bridge crashed.
+
 ## How It Works
 
 ```
