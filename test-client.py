@@ -32,14 +32,19 @@ got_fix = False
 def on_update(old, new):
     global got_fix
     p = dbus.Interface(bus.get_object(GC, new), 'org.freedesktop.DBus.Properties').GetAll(f'{GC}.Location')
-    print(f"FIX: lat={float(p['Latitude']):.6f} lon={float(p['Longitude']):.6f} "
-          f"acc={float(p['Accuracy']):.1f}m alt={float(p['Altitude']):.1f}")
-    got_fix = True
-    loop.quit()
+    desc = str(p.get('Description', ''))
+    print(f"{'CACHED' if desc else 'FIX'}: t={time.monotonic() - t_start:.1f}s "
+          f"lat={float(p['Latitude']):.6f} lon={float(p['Longitude']):.6f} "
+          f"acc={float(p['Accuracy']):.1f}m alt={float(p['Altitude']):.1f} {desc}")
+    # A cached "last known" fix is reported but doesn't count as a GPS fix.
+    if not desc:
+        got_fix = True
+        loop.quit()
 
 
 client_obj.connect_to_signal('LocationUpdated', on_update, dbus_interface=f'{GC}.Client')
 print(f'Client {client_path} on bridge {owner}; waiting up to {fix_timeout}s for a fix...')
+t_start = time.monotonic()
 dbus.Interface(client_obj, f'{GC}.Client').Start()
 GLib.timeout_add_seconds(fix_timeout, loop.quit)
 loop.run()

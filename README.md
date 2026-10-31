@@ -98,6 +98,31 @@ ssh phablet@192.168.1.120 "python3 ~/geoclue2-bridge/test-client.py 60"
 
 Starts a GeoClue2 client, waits up to 60s for a fix, stops it, and checks the bridge
 survived GPS shutdown. Exit code: 0 = fix, 2 = no fix (indoors?), 1 = bridge crashed.
+Cached "last known" positions are printed as `CACHED` and don't count as a fix.
+
+Off-device (or on-device, no root) test against a fake lomiri-location-service:
+
+```bash
+dbus-run-session -- python3 geoclue-bridge/test-bridge-mock.py
+```
+
+## Startup Timing and the Last-Fix Cache
+
+GeoClue2 has no timeout of its own, but clients do:
+- **Firefox** falls back to network geolocation (Google API) if GeoClue sends nothing
+  within 5 s of `Start()` (`geo.provider.geoclue.mls_fallback_timeout_ms` = 5000).
+- **Web pages** pick their own `getCurrentPosition()` timeout (default: none). Common
+  values are 5–10 s (Leaflet's `locate()` uses 10 s), after which the page shows an error.
+- A GPS hot start (GPS used minutes ago) takes a few seconds; cold starts take 30 s+.
+
+So the bridge remembers the last fix (in memory and in
+`~/.cache/geoclue2-bridge/last-fix.json`, mode 600). If GPS hasn't produced a fix 3 s
+after a client's `Start()`, the client gets the last known fix if it's under 1 h old.
+Its accuracy is increased by 1.5 m/s of age, and its `Description` says
+"Last known position (N s old)". Real fixes replace it as soon as they arrive.
+The accuracy is the only staleness signal that reaches web pages, because Firefox
+ignores GeoClue's `Timestamp` and stamps each location with the current time.
+If GPS is already running, a newly started client gets the current fix immediately.
 
 ## How It Works
 

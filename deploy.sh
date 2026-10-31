@@ -39,6 +39,7 @@ install() {
         "$SCRIPT_DIR/add-location-policy.sh" \
         "$SCRIPT_DIR/patch-apparmor-geoclue2.sh" \
         "$SCRIPT_DIR/test-client.py" \
+        "$SCRIPT_DIR/test-bridge-mock.py" \
         "$SCRIPT_DIR/gps-diag.sh" \
         "$DEVICE:$REMOTE_DIR/"
     scp -o StrictHostKeyChecking=no \

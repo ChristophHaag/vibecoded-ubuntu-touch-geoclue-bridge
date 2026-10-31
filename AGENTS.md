@@ -90,6 +90,21 @@ Firefox will then connect to `org.freedesktop.GeoClue2` on the system bus for lo
    bound method (`self._message_filter`) is a new object on each access; removing a filter
    libdbus doesn't know triggers a check failure that **aborts** the process (uncatchable).
    Store the bound method once (`self._filter`) and use it for both add and remove.
+7. **All lomiri calls are asynchronous** (`send_message_with_reply`). lomiri can hang (e.g.
+   the GNSS HAL), and it calls UpdatePosition back on us, so a blocking call stalls every
+   GeoClue2 client. UpdatePosition/UpdateHeading are only accepted from connections of
+   the lomiri process (PID check): lomiri replies to CreateSessionForCriteria from one
+   unique name but sends the callbacks from a **second connection**.
+8. **`dbus.exceptions.DBusException(msg, name='org...Error')`**: the error name must be
+   the `name=` keyword. Passed positionally it becomes the message, and callers see a
+   generic Python error name.
+9. **Firefox's GeoClue provider** (`dom/system/linux/GeoclueLocationProvider.cpp`)
+   falls back to network geolocation after 5 s without a location, drops Heading unless
+   Speed > 0, treats Altitude < -500 as unknown, and ignores `Timestamp` (uses now).
+   That's why cached fixes are sent after 3 s with age-inflated accuracy.
+10. **Clients are per-peer**: `GetClient` reuses the caller's client (like real GeoClue),
+    `CreateClient` makes a new one. Only the owning peer may Start/Stop/Set a client or read
+    its Location objects. Coordinates are logged at debug level only.
 
 ## Source References
 
@@ -107,3 +122,5 @@ Firefox will then connect to `org.freedesktop.GeoClue2` on the system bus for lo
 - `deploy.sh` - Deployment script
 - `enable-firefox-geoclue.sh` - Deployed as `~/geoclue2-bridge/gps.sh`; re-run after Firefox/system updates
 - `test-client.py` - On-device GeoClue2 Start/fix/Stop test (verifies bridge survives GPS stop)
+- `test-bridge-mock.py` - Bridge test against a fake lomiri on a private bus:
+  `dbus-run-session -- python3 test-bridge-mock.py` (no root, runs on host or device)
