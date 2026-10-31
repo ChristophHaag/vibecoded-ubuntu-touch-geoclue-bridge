@@ -86,6 +86,10 @@ Firefox will then connect to `org.freedesktop.GeoClue2` on the system bus for lo
 3. **CreateSessionForCriteria uses flat struct encoding** - not the `a{sv}` documented in older locationd code
 4. **The D-Bus system bus policy file is on the read-only system partition** - requires `mount -o remount,rw /`
 5. **GPS won't report indoors** - testing requires the device to have satellite visibility
+6. **dbus-python message filters must be removed with the same object that was added** - a
+   bound method (`self._message_filter`) is a new object on each access; removing a filter
+   libdbus doesn't know triggers a check failure that **aborts** the process (uncatchable).
+   Store the bound method once (`self._filter`) and use it for both add and remove.
 
 ## Source References
 

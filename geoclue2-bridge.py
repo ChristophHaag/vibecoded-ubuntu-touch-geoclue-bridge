@@ -322,16 +322,21 @@ class LomiriSessionHandler:
         self._path = path
         self._on_position = on_position
         self._on_heading = on_heading
-        # Register a message filter to intercept method calls at our session path
-        self._bus.add_message_filter(self._message_filter)
+        # Keep a single bound-method object: libdbus matches filters by the
+        # user-data pointer, and removing an unknown filter aborts the process.
+        self._filter = self._message_filter
+        self._bus.add_message_filter(self._filter)
         log.info("Registered callback handler at path %s", path)
 
     def remove_from_connection(self):
-        """Remove the message filter."""
+        """Remove the message filter (safe to call multiple times)."""
+        if self._filter is None:
+            return
         try:
-            self._bus.remove_message_filter(self._message_filter)
+            self._bus.remove_message_filter(self._filter)
         except Exception:
             pass
+        self._filter = None
 
     def _message_filter(self, bus, message):
         """Raw message filter - intercepts UpdatePosition/UpdateHeading calls."""
