@@ -6,15 +6,27 @@ bridging to Ubuntu Touch's `lomiri-location-service`.
 ## Quick Start
 
 ```bash
-# Deploy to device (will ask for device sudo password)
-./deploy.sh install
+# Copy files to the device and set everything up (asks for the device sudo
+# password once). Safe to re-run; only changes what's missing or outdated.
+./deploy.sh
 
-# Check it's running
+# Check the setup and recent log (no sudo)
 ./deploy.sh status
 
-# Test the API
+# Wait for a real GPS fix
 ./deploy.sh test
 ```
+
+`deploy.sh` copies the files and then runs `sudo ~/geoclue2-bridge/gps.sh` on
+the device. `gps.sh` does all of the setup:
+- installs the GPS HIDL workaround from `../gps-hidl-workaround`, if that
+  directory exists
+- installs the D-Bus policy and the systemd service
+- restarts the bridge if its code changed
+- grants Firefox location access
+
+Each step is skipped if it's already done. `deploy.sh copy` only copies the
+files.
 
 ## Firefox Setup
 
@@ -71,24 +83,26 @@ Ubuntu Touch's `location` policy group only grants D-Bus access to
 profile patched to talk to our bridge:
 
 ```bash
-ssh -t phablet@192.168.1.120 "sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh"
+ssh -t phablet@192.168.1.120 "sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh firefox.fuseteam_navigator_159.0"
 ```
 
 > **⚠️ Must be re-run after Firefox updates** (the click install regenerates the profile).
+> It is safe to re-run: the existing block is replaced, not duplicated.
 
 Then restart Firefox for the new AppArmor rules to take effect.
 
 ### After a System or Firefox Update
 
-Only one step is needed (auto-detects the newest installed Firefox):
+Only one step is needed (it auto-detects the newest installed Firefox and
+repairs anything the update reset):
 
 ```bash
 ssh -t phablet@192.168.1.120 "sudo ~/geoclue2-bridge/gps.sh"
 ```
 
-Then restart Firefox. The bridge itself lives in `/home` and `/etc/systemd/system`,
-which survive system updates. The old `gps-fix` library patch is no longer needed
-(the deadlock is fixed upstream).
+If it says the Firefox profile changed, restart Firefox. `~/geoclue2-bridge/gps.sh --status`
+(no sudo) shows what is set up. The old `gps-fix` library patch is no longer
+needed (the deadlock is fixed upstream).
 
 ### Testing
 
@@ -190,7 +204,7 @@ positions. This is a known issue across the Linux desktop ecosystem:
 
 **Bridge fails to start:**
 - D-Bus policy must be installed: check `/etc/dbus-1/system.d/org.freedesktop.GeoClue2.conf`
-- If missing, re-run: `./deploy.sh install`
+- If missing, re-run: `./deploy.sh` (or `sudo ~/geoclue2-bridge/gps.sh` on the device)
 
 **Permission denied / trust store:**
 - The lomiri trust store may prompt (on the phone screen) the first time

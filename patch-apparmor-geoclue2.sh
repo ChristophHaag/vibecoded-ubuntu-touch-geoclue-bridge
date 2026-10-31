@@ -10,15 +10,13 @@
 #   - aa-clickhook --force is run
 #
 # Usage (ON THE DEVICE via SSH with -t for sudo):
-#   ssh -t phablet@192.168.1.120 "sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh"
 #   ssh -t phablet@192.168.1.120 "sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh <app_id>"
 #
-# Without arguments, patches Firefox. With an argument, patches the specified app.
+# Safe to re-run: an existing block is replaced, not duplicated.
 
 set -e
 
 PROFILES_DIR="/var/lib/apparmor/profiles"
-DEFAULT_APP="firefox.fuseteam_navigator_150.0.2"
 MARKER="# GeoClue2 bridge access (added by patch-apparmor-geoclue2.sh)"
 
 patch_profile() {
@@ -33,73 +31,62 @@ patch_profile() {
         return 1
     fi
 
-    # Remove old patch if present (allows re-patching with updated rules)
-    if grep -q "$MARKER" "$profile" 2>/dev/null; then
-        python3 -c "
-import re
-with open('$profile', 'r') as f:
-    content = f.read()
-# Remove from marker to end of the block (next empty line or closing brace)
-pattern = r'\n  $MARKER.*?(?=\n  #|\n})'
-content = re.sub(pattern, '', content, flags=re.DOTALL)
-with open('$profile', 'w') as f:
-    f.write(content)
-"
-        echo "Removed old patch, re-applying..."
-    fi
-
-    # Insert GeoClue2 rules before the closing }
-    python3 -c "
-import sys
-rules = '''
-  $MARKER
+    # Strip any previous copies of our block (older versions of this script
+    # failed to remove them and appended a duplicate on every run), then
+    # append exactly one block before the profile's closing brace.
+    MARKER="$MARKER" python3 - "$profile" <<'PYEOF'
+import os, re, sys
+path = sys.argv[1]
+marker = os.environ['MARKER']
+rules = '''  {marker}
   dbus (send)
        bus=system
-       path=\"/org/freedesktop/GeoClue2{,/**}\"
-       interface=\"org.freedesktop.GeoClue2.Manager\"
+       path="/org/freedesktop/GeoClue2{{,/**}}"
+       interface="org.freedesktop.GeoClue2.Manager"
        peer=(label=unconfined),
   dbus (send)
        bus=system
-       path=\"/org/freedesktop/GeoClue2{,/**}\"
-       interface=\"org.freedesktop.GeoClue2.Client\"
+       path="/org/freedesktop/GeoClue2{{,/**}}"
+       interface="org.freedesktop.GeoClue2.Client"
        peer=(label=unconfined),
   dbus (send)
        bus=system
-       path=\"/org/freedesktop/GeoClue2{,/**}\"
-       interface=\"org.freedesktop.DBus.Properties\"
+       path="/org/freedesktop/GeoClue2{{,/**}}"
+       interface="org.freedesktop.DBus.Properties"
        peer=(label=unconfined),
   dbus (receive)
        bus=system
-       path=\"/org/freedesktop/GeoClue2{,/**}\"
-       interface=\"org.freedesktop.GeoClue2.Client\"
+       path="/org/freedesktop/GeoClue2{{,/**}}"
+       interface="org.freedesktop.GeoClue2.Client"
        peer=(label=unconfined),
-'''
+'''.format(marker=marker)
 
-with open('$profile', 'r') as f:
-    content = f.read()
-
-# Insert before the final }
+with open(path) as f:
+    old = f.read()
+block_re = re.compile(r'^  ' + re.escape(marker) + r'\n(?:(?:  dbus |       ).*\n)*',
+                      re.MULTILINE)
+content = block_re.sub('', old)
 idx = content.rfind('}')
 if idx == -1:
-    print('ERROR: No closing } found in profile', file=sys.stderr)
-    sys.exit(1)
-
-content = content[:idx] + rules + '\n' + content[idx:]
-
-with open('$profile', 'w') as f:
+    sys.exit('ERROR: No closing } found in profile')
+content = content[:idx].rstrip('\n') + '\n\n' + rules + content[idx:]
+if content == old:
+    print('Already patched')
+    sys.exit(0)
+tmp = path + '.tmp'
+with open(tmp, 'w') as f:
     f.write(content)
-"
-
-    echo "Patched: $app_id"
+os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+os.replace(tmp, path)
+print('Patched (%d old block(s) replaced)' % len(block_re.findall(old)))
+PYEOF
     return 0
 }
 
-reload_profiles() {
-    echo "Reloading AppArmor profiles..."
-    if command -v apparmor_parser >/dev/null 2>&1; then
-        apparmor_parser -r "$PROFILES_DIR"/click_* 2>/dev/null || true
-    fi
-    echo "Done."
+reload_profile() {
+    local profile="$PROFILES_DIR/click_$1"
+    echo "Reloading AppArmor profile..."
+    apparmor_parser -r --write-cache "$profile"
 }
 
 # --- Main ---
@@ -110,22 +97,19 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-APP_ID="${1:-$DEFAULT_APP}"
+APP_ID="${1:-}"
 
-if [ "$APP_ID" = "--help" ] || [ "$APP_ID" = "-h" ]; then
-    echo "Usage: sudo $0 [app_id]"
+if [ -z "$APP_ID" ] || [ "$APP_ID" = "--help" ] || [ "$APP_ID" = "-h" ]; then
+    echo "Usage: sudo $0 <app_id>"
     echo ""
     echo "Patches an app's AppArmor profile to allow GeoClue2 D-Bus access."
-    echo "Default app: $DEFAULT_APP"
     echo ""
     echo "Must be re-run after app updates or aa-clickhook --force."
     echo ""
     echo "From host:"
-    echo "  ssh -t phablet@192.168.1.120 \"sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh\""
+    echo "  ssh -t phablet@192.168.1.120 \"sudo /home/phablet/geoclue2-bridge/patch-apparmor-geoclue2.sh <app_id>\""
     exit 0
 fi
 
 patch_profile "$APP_ID"
-reload_profiles
-echo ""
-echo "Firefox needs to be restarted to pick up the new profile."
+reload_profile "$APP_ID"

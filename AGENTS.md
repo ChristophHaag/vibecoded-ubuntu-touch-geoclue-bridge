@@ -58,17 +58,31 @@ The confinement check works by:
 ## Deployment
 
 ```bash
-./deploy.sh install    # Copies files, installs D-Bus policy (needs sudo), starts service
-./deploy.sh status     # Check service status and logs
-./deploy.sh test       # Verify GeoClue2 API is responding
-./deploy.sh uninstall  # Remove everything
+./deploy.sh install    # Copy files, then 'sudo gps.sh' on the device (one password prompt)
+./deploy.sh copy       # Copy files only, no sudo (agents can do this themselves)
+./deploy.sh status     # 'gps.sh --status' + recent bridge log, no sudo
+./deploy.sh test       # Real fix test via test-client.py
+./deploy.sh uninstall  # Remove service and D-Bus policy
 ```
 
-The install step will:
-1. Copy bridge files to `/home/phablet/geoclue2-bridge/`
-2. Install D-Bus policy to `/etc/dbus-1/system.d/` (requires remount rw, needs sudo)
-3. Install systemd unit to `/etc/systemd/system/` (writable)
-4. Enable and start the service
+`gps.sh` (on the device, as root) is the single idempotent setup step:
+1. Runs `~/gps-hidl-workaround/gps-hidl-workaround.sh install` if deployed
+   (deploy.sh copies it from the sibling `../gps-hidl-workaround/`)
+2. Installs the D-Bus policy to `/etc/dbus-1/system.d/` if it differs
+   (remounts / rw only then)
+3. Installs/enables the systemd unit; restarts the bridge only if
+   `geoclue2-bridge.py` or the unit changed. It records their md5 and the
+   service start time in `/run/geoclue2-bridge.deployed`, because scp resets
+   mtimes and would otherwise cause a restart on every deploy.
+4. Firefox: `add-location-policy.sh` then `patch-apparmor-geoclue2.sh`
+   (this order matters: the first regenerates profiles via aa-clickhook)
+
+`gps.sh --status` works without root and is the quickest way to check the setup.
+
+Older versions of `patch-apparmor-geoclue2.sh` used the marker text (which has
+parentheses) unescaped in a regex. Removing the old block never matched, so
+every run appended another copy of the rules. The current version strips all
+copies and writes one.
 
 ## Firefox Configuration
 
@@ -120,7 +134,7 @@ Firefox will then connect to `org.freedesktop.GeoClue2` on the system bus for lo
 - `org.freedesktop.GeoClue2.conf` - D-Bus system bus policy
 - `geoclue2-bridge.service` - systemd unit file
 - `deploy.sh` - Deployment script
-- `enable-firefox-geoclue.sh` - Deployed as `~/geoclue2-bridge/gps.sh`; re-run after Firefox/system updates
+- `gps.sh` - Idempotent on-device setup/repair of everything; re-run after Firefox/system updates
 - `test-client.py` - On-device GeoClue2 Start/fix/Stop test (verifies bridge survives GPS stop)
 - `test-bridge-mock.py` - Bridge test against a fake lomiri on a private bus:
   `dbus-run-session -- python3 test-bridge-mock.py` (no root, runs on host or device)
